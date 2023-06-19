@@ -1,0 +1,66 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: PancakeTAS <pancake@mgnet.work>
+Date: Mon, 19 Jun 2023 21:13:28 +0200
+Subject: [PATCH] Override to end dimension
+
+
+diff --git a/src/main/java/net/minecraft/network/protocol/game/ClientboundLoginPacket.java b/src/main/java/net/minecraft/network/protocol/game/ClientboundLoginPacket.java
+index ba2af918d64647fb2e8ca12f9d07202491cecbbf..988152beb6108ca06be5dbf8d055a7cb6971c9e9 100644
+--- a/src/main/java/net/minecraft/network/protocol/game/ClientboundLoginPacket.java
++++ b/src/main/java/net/minecraft/network/protocol/game/ClientboundLoginPacket.java
+@@ -17,6 +17,7 @@ import net.minecraft.resources.RegistryOps;
+ import net.minecraft.resources.ResourceKey;
+ import net.minecraft.world.level.GameType;
+ import net.minecraft.world.level.Level;
++import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
+ import net.minecraft.world.level.dimension.DimensionType;
+ 
+ public record ClientboundLoginPacket(int playerId, boolean hardcore, GameType gameType, @Nullable GameType previousGameType, Set<ResourceKey<Level>> levels, RegistryAccess.Frozen registryHolder, ResourceKey<DimensionType> dimensionType, ResourceKey<Level> dimension, long seed, int maxPlayers, int chunkRadius, int simulationDistance, boolean reducedDebugInfo, boolean showDeathScreen, boolean isDebug, boolean isFlat, Optional<GlobalPos> lastDeathLocation) implements Packet<ClientGamePacketListener> {
+@@ -36,7 +37,10 @@ public record ClientboundLoginPacket(int playerId, boolean hardcore, GameType ga
+         buf.writeByte(GameType.getNullableId(this.previousGameType));
+         buf.writeCollection(this.levels, FriendlyByteBuf::writeResourceKey);
+         buf.writeWithCodec(BUILTIN_CONTEXT_OPS, RegistrySynchronization.NETWORK_CODEC, this.registryHolder);
+-        buf.writeResourceKey(this.dimensionType);
++        if (Level.SHOULD_OVERRIDE)
++            buf.writeResourceKey(BuiltinDimensionTypes.END);
++        else
++            buf.writeResourceKey(this.dimensionType);
+         buf.writeResourceKey(this.dimension);
+         buf.writeLong(this.seed);
+         buf.writeVarInt(this.maxPlayers);
+diff --git a/src/main/java/net/minecraft/network/protocol/game/ClientboundRespawnPacket.java b/src/main/java/net/minecraft/network/protocol/game/ClientboundRespawnPacket.java
+index ac9a6e622d1ebcb4a1b290778961f9fc64ea4291..80bbbfefea97fe5c4fbe03c4964144a16ea81106 100644
+--- a/src/main/java/net/minecraft/network/protocol/game/ClientboundRespawnPacket.java
++++ b/src/main/java/net/minecraft/network/protocol/game/ClientboundRespawnPacket.java
+@@ -9,6 +9,7 @@ import net.minecraft.network.protocol.Packet;
+ import net.minecraft.resources.ResourceKey;
+ import net.minecraft.world.level.GameType;
+ import net.minecraft.world.level.Level;
++import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
+ import net.minecraft.world.level.dimension.DimensionType;
+ 
+ public class ClientboundRespawnPacket implements Packet<ClientGamePacketListener> {
+@@ -27,7 +28,10 @@ public class ClientboundRespawnPacket implements Packet<ClientGamePacketListener
+     private final Optional<GlobalPos> lastDeathLocation;
+ 
+     public ClientboundRespawnPacket(ResourceKey<DimensionType> dimensionType, ResourceKey<Level> dimension, long sha256Seed, GameType gameMode, @Nullable GameType previousGameMode, boolean debugWorld, boolean flatWorld, byte flag, Optional<GlobalPos> lastDeathPos) {
+-        this.dimensionType = dimensionType;
++        if (Level.SHOULD_OVERRIDE)
++            this.dimensionType = BuiltinDimensionTypes.END;
++        else
++            this.dimensionType = dimensionType;
+         this.dimension = dimension;
+         this.seed = sha256Seed;
+         this.playerGameType = gameMode;
+diff --git a/src/main/java/net/minecraft/world/level/Level.java b/src/main/java/net/minecraft/world/level/Level.java
+index 973ecd50f9cb6b86c353586e84d15dcb118ccb60..1817ae7cf81f6315819cca3395b41f0d40062b44 100644
+--- a/src/main/java/net/minecraft/world/level/Level.java
++++ b/src/main/java/net/minecraft/world/level/Level.java
+@@ -106,6 +106,7 @@ import org.bukkit.event.world.GenericGameEvent;
+ 
+ public abstract class Level implements LevelAccessor, AutoCloseable {
+ 
++    public static boolean SHOULD_OVERRIDE = false;
+     public static final Codec<ResourceKey<Level>> RESOURCE_KEY_CODEC = ResourceKey.codec(Registries.DIMENSION);
+     public static final ResourceKey<Level> OVERWORLD = ResourceKey.create(Registries.DIMENSION, new ResourceLocation("overworld"));
+     public static final ResourceKey<Level> NETHER = ResourceKey.create(Registries.DIMENSION, new ResourceLocation("the_nether"));
